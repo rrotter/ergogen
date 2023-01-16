@@ -8,9 +8,9 @@
 
   (paper "A3")
   (title_block
-    (title export)
-    (rev v3.14)
-    (company MrZealot)
+    (title "export")
+    (rev "v3.14")
+    (company "MrZealot")
   )
 
   (layers
