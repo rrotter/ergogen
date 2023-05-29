@@ -7,8 +7,8 @@ const prep = require('./prepare')
 const anchor = require('./anchor').parse
 const filter = require('./filter').parse
 
-const kicad_prefix = `
-(kicad_pcb (version 20211014) (generator pcbnew)
+const kicad_prefix =
+`(kicad_pcb (version 20221018) (generator ergogen)
 
   (general
     (thickness 1.6)
@@ -45,42 +45,18 @@ const kicad_prefix = `
   )
 
   (setup
-    (last_trace_width 0.25)
-    (trace_clearance 0.2)
-    (zone_clearance 0.508)
-    (zone_45_only no)
-    (trace_min 0.2)
-    (via_size 0.8)
-    (via_drill 0.4)
-    (via_min_size 0.4)
-    (via_min_drill 0.3)
-    (uvia_size 0.3)
-    (uvia_drill 0.1)
-    (uvias_allowed no)
-    (uvia_min_size 0.2)
-    (uvia_min_drill 0.1)
-    (edge_width 0.05)
-    (segment_width 0.2)
-    (pcb_text_width 0.3)
-    (pcb_text_size 1.5 1.5)
-    (mod_edge_width 0.12)
-    (mod_text_size 1 1)
-    (mod_text_width 0.15)
-    (pad_size 1.524 1.524)
-    (pad_drill 0.762)
-    (pad_to_mask_clearance 0.05)
-    (aux_axis_origin 0 0)
-    (visible_elements FFFFFF7F)
+    (pad_to_mask_clearance 0)
     (pcbplotparams
       (layerselection 0x00010fc_ffffffff)
+      (plot_on_all_layers_selection 0x0000000_00000000)
       (disableapertmacros false)
       (usegerberextensions false)
       (usegerberattributes true)
       (usegerberadvancedattributes true)
       (creategerberjobfile true)
-      (svguseinch false)
-      (svgprecision 6)
-      (excludeedgelayer true)
+      (dashed_line_dash_ratio 12.000000)
+      (dashed_line_gap_ratio 3.000000)
+      (svgprecision 4)
       (plotframeref false)
       (viasonmask false)
       (mode 1)
@@ -111,18 +87,6 @@ const kicad_suffix = `
 )
 `
 
-const kicad_netclass = `
-  (net_class Default "This is the default net class."
-    (clearance 0.2)
-    (trace_width 0.25)
-    (via_dia 0.8)
-    (via_drill 0.4)
-    (uvia_dia 0.3)
-    (uvia_drill 0.1)
-    __ADD_NET
-  )
-`
-
 const makerjs2kicad = exports._makerjs2kicad = (model, layer) => {
     const grs = []
     const xy = val => `${val[0]} ${-val[1]}`
@@ -131,7 +95,7 @@ const makerjs2kicad = exports._makerjs2kicad = (model, layer) => {
             const p = wp.pathContext
             switch (p.type) {
                 case 'line':
-                    grs.push(`(gr_line (start ${xy(p.origin)}) (end ${xy(p.end)}) (layer "${layer}") (width 0.15))`)
+                    grs.push(`(gr_line (start ${xy(p.origin)}) (end ${xy(p.end)}) (stroke (width 0.15) (type solid)) (layer "${layer}"))`)
                     break
                 case 'arc':
                     // Normalize angles to the range [0, 360]
@@ -145,19 +109,19 @@ const makerjs2kicad = exports._makerjs2kicad = (model, layer) => {
                     const start = [p.origin[0] + p.radius * Math.cos(startAngle * (Math.PI / 180)), p.origin[1] + p.radius * Math.sin(startAngle * (Math.PI / 180))]
                     const mid = [p.origin[0] + p.radius * Math.cos(((startAngle + endAngle) * (Math.PI / 180)) / 2), p.origin[1] + p.radius * Math.sin(((startAngle + endAngle) * (Math.PI / 180)) / 2)]
                     const end = [p.origin[0] + p.radius * Math.cos(endAngle * (Math.PI / 180)), p.origin[1] + p.radius * Math.sin(endAngle * (Math.PI / 180))]
-                    grs.push(`(gr_arc (start ${xy(start)}) (mid ${xy(mid)}) (end ${xy(end)}) (layer "${layer}") (width 0.15))`)
+                    grs.push(`(gr_arc (start ${xy(start)}) (mid ${xy(mid)}) (end ${xy(end)}) (stroke (width 0.15) (type solid)) (layer "${layer}"))`)
                     break
                 case 'circle':
                     const circle_center = p.origin
                     const circle_end = m.point.add(circle_center, [p.radius, 0])
-                    grs.push(`(gr_circle (center ${xy(circle_center)}) (end ${xy(circle_end)}) (layer "${layer}") (width 0.15))`)
+                    grs.push(`(gr_circle (center ${xy(circle_center)}) (end ${xy(circle_end)}) (stroke (width 0.15) (type solid)) (fill none) (layer "${layer}"))`)
                     break
                 default:
                     throw new Error(`Can't convert path type "${p.type}" to kicad!`)
             }
         }
     })
-    return grs.join('\n')
+    return grs.join('\n  ')
 }
 
 const footprint_types = require('./footprints')
@@ -359,22 +323,19 @@ exports.parse = (config, points, outlines, units) => {
             add_nets_arr.push(`(add_net "${net}")`)
         }
 
-        const netclass = kicad_netclass.replace('__ADD_NET', add_nets_arr.join('\n'))
-        const nets_text = nets_arr.join('\n')
-        const footprint_text = footprints.join('\n')
+        const nets_text = nets_arr.join('\n  ')
+        const footprint_text = footprints.join('\n  ')
         const outline_text = Object.values(kicad_outlines).join('\n')
         const personalized_prefix = kicad_prefix
             .replace('KEYBOARD_NAME_HERE', pcb_name)
             .replace('VERSION_HERE', config.meta && config.meta.version || 'v1.0.0')
             .replace('YOUR_NAME_HERE', config.meta && config.meta.author || 'Unknown')
-        results[pcb_name] = `
-            ${personalized_prefix}
-            ${nets_text}
-            ${netclass}
-            ${footprint_text}
-            ${outline_text}
-            ${kicad_suffix}
-        `
+        results[pcb_name] =
+`${personalized_prefix}
+  ${nets_text}
+  ${footprint_text}
+  ${outline_text}
+${kicad_suffix}`
     }
 
     return results
